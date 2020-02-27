@@ -74,6 +74,7 @@ provider "kubernetes" {
     cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
     alias                  = "aks"
     version                = "1.10.0"
+    load_config_file       = "false"
 }
 
 provider "helm" {
