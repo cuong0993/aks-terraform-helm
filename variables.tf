@@ -24,5 +24,5 @@ variable "resource_group_location" {
 }
 
 variable "sp_name" {
-  default     = "aks-test-sp"
+  default = "aks-test-sp"
 }
