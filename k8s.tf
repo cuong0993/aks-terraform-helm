@@ -1,35 +1,8 @@
-resource "random_string" "aks_sp_password" {
-  length  = 16
-  special = true
-  keepers = {
-    service_principal = azuread_service_principal.auth.id
-  }
-}
+
 
 resource "random_integer" "random_int" {
   min = 100
   max = 999
-}
-
-resource "azuread_application" "auth" {
-  name = "${var.sp_name}-${var.resource_group_name}-${var.resource_group_location}"
-}
-
-resource "azuread_service_principal" "auth" {
-  application_id = azuread_application.auth.application_id
-}
-
-resource "azuread_service_principal_password" "auth" {
-  service_principal_id = azuread_service_principal.auth.id
-  value                = random_string.aks_sp_password.result
-  end_date_relative    = "43800h" # 5 years
-
-  # needed for the service principal and application sync inside Azure
-  # https://github.com/terraform-providers/terraform-provider-azuread/issues/4#issuecomment-407542721
-
-  provisioner "local-exec" {
-    command = "sleep 60"
-  }
 }
 
 resource "azurerm_resource_group" "cluster" {
@@ -55,9 +28,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
     os_disk_size_gb     = 32
   }
 
-  service_principal {
-    client_id     = azuread_service_principal.auth.application_id
-    client_secret = azuread_service_principal_password.auth.value
+  identity {
+    type = "SystemAssigned"
   }
 
   network_profile {
@@ -65,16 +37,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
-# forcing 1.10.0 here because of a bug\by design in 1.11.0
-# https://github.com/terraform-providers/terraform-provider-kubernetes/issues/759
 provider "kubernetes" {
   host                   = azurerm_kubernetes_cluster.aks.kube_config.0.host
   client_certificate     = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_certificate)
   client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_key)
   cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
   alias                  = "aks"
-  version                = "1.11.1"
-  load_config_file       = "false"
 }
 
 provider "helm" {
@@ -84,16 +52,6 @@ provider "helm" {
     client_key             = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.client_key)
     cluster_ca_certificate = base64decode(azurerm_kubernetes_cluster.aks.kube_config.0.cluster_ca_certificate)
   }
-}
-
-data "helm_repository" "stable" {
-  name = "stable"
-  url  = "https://kubernetes-charts.storage.googleapis.com"
-}
-
-data "helm_repository" "bitnami" {
-  name = "bitnami"
-  url  = "https://charts.bitnami.com/bitnami"
 }
 
 resource "null_resource" "save-kube-config" {
@@ -124,8 +82,9 @@ resource "kubernetes_namespace" "wordpress" {
 
 resource "helm_release" "nginx_ingress" {
   name       = "nginx-ingress"
-  repository = data.helm_repository.stable.metadata.0.name
-  chart      = "nginx-ingress"
+  repository = "https://kubernetes.github.io/ingress-nginx"
+  chart      = "ingress-nginx"
+  version    = "4.6.1"
   wait       = false
   namespace  = kubernetes_namespace.nginx_ingress.metadata.0.name
 
@@ -137,16 +96,17 @@ resource "helm_release" "nginx_ingress" {
 
 resource "helm_release" "wordpress" {
   name       = "wordpress"
-  repository = data.helm_repository.bitnami.metadata.0.name
+  repository = "https://charts.bitnami.com/bitnami"
   chart      = "wordpress"
+  version    = "22.4.10"
   wait       = false
   namespace  = kubernetes_namespace.wordpress.metadata.0.name
 
-  set_string {
+  set {
     name  = "persistence.storageClass"
     value = "default"
   }
-  set_string {
+  set {
     name  = "persistence.size"
     value = "5Gi"
   }
@@ -162,7 +122,7 @@ resource "helm_release" "wordpress" {
     name  = "ingress.enabled"
     value = "true"
   }
-  set_string {
+  set {
     name  = "service.type"
     value = "ClusterIP"
   }

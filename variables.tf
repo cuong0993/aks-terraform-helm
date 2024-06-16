@@ -1,11 +1,11 @@
 variable "kubernetes_version" {
   description = "The k8s version to deploy eg: '1.8.5', '1.10.5' etc"
-  default     = "1.15.7"
+  default     = "1.29.4"
 }
 
 variable "vm_size" {
   description = "The VM_SKU to use for the agents in the cluster"
-  default     = "Standard_B2s"
+  default     = "Standard_B2ms"
 }
 
 variable "node_count" {
@@ -15,7 +15,7 @@ variable "node_count" {
 
 variable "resource_group_name" {
   description = "Name of the azure resource group."
-  default     = "hyperglance"
+  default     = "cuond1"
 }
 
 variable "resource_group_location" {
